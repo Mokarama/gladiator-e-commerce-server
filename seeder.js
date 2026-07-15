@@ -1,20 +1,16 @@
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const connectDB = require('./config/db');
-const User = require('./models/User');
-const Product = require('./models/Product');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
+const prisma = require('./config/prisma');
 
 dotenv.config();
 
 const seedData = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB Connected for Seeding...');
+    console.log('Prisma connected for Seeding...');
 
     // Clear existing data
-    await User.deleteMany();
-    await Product.deleteMany();
+    await prisma.product.deleteMany();
+    await prisma.user.deleteMany();
 
     console.log('Existing Data Cleared.');
 
@@ -23,20 +19,25 @@ const seedData = async () => {
     const adminPassword = await bcrypt.hash('demo1234', salt);
     const userPassword = await bcrypt.hash('demo1234', salt);
 
-    const createdUsers = await User.insertMany([
-      { name: 'Admin User', email: 'admin@gladiator.com', password: adminPassword, role: 'Admin' },
-      { name: 'Regular User', email: 'user@gladiator.com', password: userPassword, role: 'User' }
-    ]);
-    
-    const adminId = createdUsers[0]._id;
+    const createdUsers = await prisma.user.createMany({
+      data: [
+        { name: 'Admin User', email: 'admin@gladiator.com', password: adminPassword, role: 'Admin' },
+        { name: 'Regular User', email: 'user@gladiator.com', password: userPassword, role: 'User' }
+      ],
+      skipDuplicates: true,
+    });
+
+    const adminUsers = await prisma.user.findMany({
+      where: { email: 'admin@gladiator.com' },
+      select: { id: true },
+    });
+    const adminId = adminUsers[0].id;
 
     // Seed Products
     const products = [
       {
-        user: adminId,
         title: 'Premium Wireless Headphones',
         image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
-        brand: 'AudioTech',
         category: 'Electronics',
         description: 'High-fidelity audio with active noise cancellation.',
         price: 299.99,
@@ -45,10 +46,8 @@ const seedData = async () => {
         numReviews: 12
       },
       {
-        user: adminId,
         title: 'Smart Fitness Watch',
         image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&q=80',
-        brand: 'FitPro',
         category: 'Electronics',
         description: 'Track your health, workouts, and stay connected.',
         price: 199.50,
@@ -57,10 +56,8 @@ const seedData = async () => {
         numReviews: 8
       },
       {
-        user: adminId,
         title: 'Ultra-thin Laptop',
         image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500&q=80',
-        brand: 'ComputeX',
         category: 'Electronics',
         description: 'Powerful performance in a sleek, lightweight design.',
         price: 1299.00,
@@ -69,10 +66,8 @@ const seedData = async () => {
         numReviews: 15
       },
       {
-        user: adminId,
         title: 'Running Shoes',
         image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&q=80',
-        brand: 'Stride',
         category: 'Sports',
         description: 'Comfortable and durable running shoes for everyday use.',
         price: 89.99,
@@ -81,10 +76,8 @@ const seedData = async () => {
         numReviews: 24
       },
       {
-        user: adminId,
         title: 'Designer T-Shirt',
         image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80',
-        brand: 'Vogue',
         category: 'Fashion',
         description: 'Premium cotton t-shirt with a modern fit.',
         price: 34.99,
@@ -93,10 +86,8 @@ const seedData = async () => {
         numReviews: 5
       },
       {
-        user: adminId,
         title: 'Smart Home Speaker',
         image: 'https://images.unsplash.com/photo-1589492477829-5e65395b66cc?w=500&q=80',
-        brand: 'HomeTech',
         category: 'Home & Living',
         description: 'Control your smart home with your voice.',
         price: 149.99,
@@ -106,7 +97,13 @@ const seedData = async () => {
       }
     ];
 
-    await Product.insertMany(products);
+    await prisma.product.createMany({
+      data: products.map((product) => ({
+        ...product,
+        userId: adminId,
+      })),
+      skipDuplicates: true,
+    });
 
     console.log('Data Imported Successfully!');
     process.exit();
